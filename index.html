@@ -418,7 +418,7 @@ function renderLegend(events) {
     const c = ev.categories;
     if (!c || seen.has(c)) return;
     seen.add(c);
-    items.push({ cat: c, css: catClass(c), label: shortSummary(ev.summary.replace(/\s*-\s*מחזור\s*\d+/, '').replace(/\s*\(.*\)/, '')) || c });
+    items.push({ cat: c, css: catClass(c), label: c });
   });
 
   // Sort: round categories first, then others
