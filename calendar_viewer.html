@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICS Viewer</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #f7f8fc;
+    --border: #e8eaf0;
+    --text: #1a1a2e;
+    --text-muted: #888;
+    --header-bg: linear-gradient(135deg, #1a1a2e, #16213e);
+    --month-header: #1a1a2e;
+    --today-bg: #fffde7;
+    --tooltip-bg: #1a1a2e;
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #0d1117;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --header-bg: linear-gradient(135deg, #010409, #0d1117);
+    --month-header: #010409;
+    --today-bg: #2d2a1a;
+    --tooltip-bg: #010409;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); direction: rtl; transition: background 0.2s, color 0.2s; display: flex; flex-direction: column; min-height: 100dvh; }
+
+  header {
+    background: var(--header-bg);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  header h1 { font-size: 1.3rem; }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .theme-toggle {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: background 0.2s;
+  }
+  .theme-toggle:hover { background: rgba(255,255,255,0.25); }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    justify-content: space-between;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--text); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+  .legend-sep { color: var(--border); }
+
+  .round-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 5px 12px;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.15s;
+  }
+  .round-btn:hover { border-color: #4a9eff; color: var(--text); }
+  .round-btn.active { background: #4a9eff; border-color: #4a9eff; color: white; font-weight: 600; }
+
+  .months-container {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .month-block { background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+  .month-header {
+    background: var(--month-header);
+    color: white;
+    padding: 10px 18px;
+    font-size: 1rem;
+    font-weight: bold;
+  }
+
+  .month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    direction: ltr;
+  }
+  #nav-label {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .nav-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 18px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .nav-arrow { font-size: 1.3rem; line-height: 1; }
+  .nav-month-hint { font-size: 0.78rem; color: var(--text-muted); }
+  .nav-btn:hover:not(:disabled) { background: #4a9eff; color: white; border-color: #4a9eff; }
+  .nav-btn:hover:not(:disabled) .nav-month-hint { color: rgba(255,255,255,0.8); }
+  .nav-btn:disabled { opacity: 0.25; cursor: default; }
+  @media (max-width: 640px) { .nav-month-hint { display: none; } }
+
+  /* ── Desktop: 7-column grid ── */
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .day-header {
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+  }
+
+  .day-cell {
+    min-height: 32px;
+    border-bottom: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    padding: 5px;
+    background: var(--surface);
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
+  }
+  .day-cell.empty { min-height: 32px; }
+  .day-cell.empty { background: var(--surface2); }
+  .day-cell.today { background: var(--today-bg); }
+
+  .day-num {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 2px 4px;
+    display: inline-block;
+    margin-bottom: 3px;
+  }
+  .day-cell.today .day-num {
+    background: #4a9eff;
+    color: white;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+
+  .event-pill {
+    font-size: 0.9rem;
+    padding: 3px 6px;
+    border-radius: 3px;
+    margin: 1px 0;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-word;
+    font-weight: 500;
+    line-height: 1.4;
+    display: flex;
+    align-items: flex-start;
+    gap: 3px;
+    min-width: 0;
+  }
+  .event-pill:hover { filter: brightness(1.1); }
+  .pill-icon { flex-shrink: 0; }
+
+  /* ── Mobile: agenda list view ── */
+  .agenda-list { display: none; overflow-y: auto; flex: 1; }
+
+  .agenda-week {
+    border-bottom: 1px solid var(--border);
+  }
+  .agenda-week-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 6px 12px 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .agenda-day {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .agenda-day.today { background: var(--today-bg); }
+  .agenda-day.empty-day { opacity: 0.35; }
+  .agenda-date {
+    min-width: 42px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .agenda-date .dn {
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+  }
+  .agenda-date .dw {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+  }
+  .agenda-day.today .dn {
+    background: #4a9eff;
+    color: white;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+  .agenda-events { flex: 1; display: flex; flex-direction: column; gap: 3px; padding-top: 2px; }
+  .agenda-pill {
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+
+  /* ── Responsive breakpoints ── */
+  @media (max-width: 640px) {
+    header { padding: 12px 14px; }
+    header h1 { font-size: 1rem; }
+    .theme-toggle { padding: 5px 10px; font-size: 0.75rem; }
+
+    .toolbar { padding: 8px 12px; gap: 6px; flex-direction: column; align-items: flex-start; }
+    .legend { display: none; }  /* hide legend on mobile — color is self-evident */
+
+    .months-container { padding: 0; min-height: 0; }
+    .month-block { border-radius: 0; min-height: 0; }
+
+    /* hide grid, show agenda */
+    .calendar-grid, .day-header { display: none; }
+    .agenda-list { display: flex; flex-direction: column; overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
+  }
+
+  /* Light theme colors */
+  .cat-s1-home    { background: #bbdefb; color: #0d47a1; border-right: 3px solid #1565c0; }
+  .cat-s1-station { background: #1565c0; color: #e3f2fd; border-right: 3px solid #0d47a1; }
+  .cat-s2-home    { background: #c8e6c9; color: #1b5e20; border-right: 3px solid #2e7d32; }
+  .cat-s2-station { background: #2e7d32; color: #e8f5e9; border-right: 3px solid #1b5e20; }
+  .cat-holiday    { background: #fff3e0; color: #e65100; border-right: 3px solid #f57c00; }
+  .cat-training   { background: #e8eaf6; color: #283593; border-right: 3px solid #3949ab; }
+  .cat-line       { background: #fce4ec; color: #880e4f; border-right: 3px solid #c2185b; }
+  .cat-command    { background: #f3e5f5; color: #4a148c; border-right: 3px solid #7b1fa2; }
+  .cat-s1-return  { background: #e3f2fd; color: #0d47a1; border-right: 3px solid #1565c0; }
+  .cat-s2-return  { background: #e8f5e9; color: #1b5e20; border-right: 3px solid #2e7d32; }
+  .cat-special    { background: #e0f2f1; color: #004d40; border-right: 3px solid #00796b; }
+
+  /* Dark theme overrides */
+  [data-theme="dark"] .cat-s1-home    { background: #0d2137; color: #90caf9; border-right-color: #1565c0; }
+  [data-theme="dark"] .cat-s1-station { background: #1565c0; color: #e3f2fd; border-right-color: #90caf9; }
+  [data-theme="dark"] .cat-s1-return  { background: #0a1828; color: #64b5f6; border-right-color: #1565c0; }
+  [data-theme="dark"] .cat-s2-home    { background: #0a1f0a; color: #a5d6a7; border-right-color: #2e7d32; }
+  [data-theme="dark"] .cat-s2-station { background: #1b5e20; color: #e8f5e9; border-right-color: #a5d6a7; }
+  [data-theme="dark"] .cat-s2-return  { background: #071507; color: #81c784; border-right-color: #2e7d32; }
+  [data-theme="dark"] .cat-holiday    { background: #2a1a00; color: #ffcc80; border-right-color: #f57c00; }
+  [data-theme="dark"] .cat-training   { background: #0e1030; color: #9fa8da; border-right-color: #3949ab; }
+  [data-theme="dark"] .cat-line       { background: #2a0010; color: #f48fb1; border-right-color: #c2185b; }
+  [data-theme="dark"] .cat-command    { background: #1a0028; color: #ce93d8; border-right-color: #7b1fa2; }
+  [data-theme="dark"] .cat-special    { background: #00141a; color: #80cbc4; border-right-color: #00796b; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg); }
+
+  /* Tooltip */
+  .tooltip {
+    display: none;
+    position: fixed;
+    background: var(--tooltip-bg);
+    color: #e6edf3;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    max-width: 290px;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    line-height: 1.7;
+    direction: rtl;
+    border: 1px solid var(--border);
+  }
+  .tooltip.visible { display: block; }
+  .tooltip strong { display: block; margin-bottom: 5px; font-size: 0.88rem; border-bottom: 1px solid #30363d; padding-bottom: 4px; }
+  .tooltip .dates { font-size: 0.73rem; opacity: 0.6; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="pageTitle">ICS Viewer</h1>
+  <div class="header-right">
+    <button class="theme-toggle" onclick="toggleTheme()">☀️ מצב בהיר</button>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="legend">
+    <div class="legend" id="legend"></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="font-size:0.8rem;color:var(--text-muted)">הצג:</span>
+    <button class="round-btn active" id="btn-both" onclick="setFilter('both')">שני הסבבים</button>
+    <button class="round-btn" id="btn-s1" onclick="setFilter('s1')">סבב 1 בלבד</button>
+    <button class="round-btn" id="btn-s2" onclick="setFilter('s2')">סבב 2 בלבד</button>
+    <span class="legend-sep" style="margin:0 4px">|</span>
+    <input type="file" id="icsFile" accept=".ics" style="display:none" onchange="loadICSFile(event)">
+    <button class="round-btn" onclick="document.getElementById('icsFile').click()">📂 טען ICS</button>
+    <span id="icsFileName" style="font-size:0.75rem;color:var(--text-muted)"></span>
+  </div>
+</div>
+
+<div class="month-nav">
+  <button class="nav-btn" id="nav-next" onclick="nextMonth()">
+    <span class="nav-arrow">&#8249;</span>
+    <span class="nav-month-hint" id="hint-next"></span>
+  </button>
+  <span id="nav-label"></span>
+  <button class="nav-btn" id="nav-prev" onclick="prevMonth()">
+    <span class="nav-month-hint" id="hint-prev"></span>
+    <span class="nav-arrow">&#8250;</span>
+  </button>
+</div>
+
+<div class="months-container" id="calendar"></div>
+
+<div id="emptyState" style="display:none; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:16px; color:var(--text-muted); padding:40px;">
+  <div style="font-size:3rem">📅</div>
+  <div style="font-size:1.1rem; font-weight:600; color:var(--text)">טען קובץ ICS להצגת הלוח</div>
+  <div style="font-size:0.9rem">בחר את קובץ military_schedule.ics</div>
+  <input type="file" id="icsFile2" accept=".ics" style="display:none" onchange="loadICSFile(event)">
+  <button class="round-btn" style="padding:10px 24px; font-size:1rem;" onclick="document.getElementById('icsFile2').click()">📂 בחר קובץ ICS</button>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── Legend ──
+function renderLegend(events) {
+  const seen = new Set();
+  const items = [];
+  events.forEach(ev => {
+    const c = ev.categories;
+    if (!c || seen.has(c)) return;
+    seen.add(c);
+    items.push({ cat: c, css: catClass(c), label: shortSummary(ev.summary.replace(/\s*-\s*מחזור\s*\d+/, '').replace(/\s*\(.*\)/, '')) || c });
+  });
+
+  // Sort: round categories first, then others
+  items.sort((a, b) => {
+    const aR = a.cat.includes('סבב') ? 0 : 1;
+    const bR = b.cat.includes('סבב') ? 0 : 1;
+    return aR - bR || a.cat.localeCompare(b.cat, 'he');
+  });
+
+  const legend = document.getElementById('legend');
+  legend.innerHTML = '';
+  let lastGroup = null;
+  items.forEach(({ css, label, cat }) => {
+    const group = cat.includes('סבב') ? 'round' : 'other';
+    if (lastGroup && lastGroup !== group) {
+      const sep = document.createElement('span');
+      sep.className = 'legend-sep';
+      sep.textContent = '|';
+      legend.appendChild(sep);
+    }
+    lastGroup = group;
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    const dot = document.createElement('div');
+    dot.className = `legend-dot ${css}`;
+    const lbl = document.createElement('span');
+    lbl.textContent = label;
+    item.appendChild(dot);
+    item.appendChild(lbl);
+    legend.appendChild(item);
+  });
+}
+
+
+let activeFilter = 'both';
+
+function setFilter(f) {
+  activeFilter = f;
+  ['both','s1','s2'].forEach(id => {
+    document.getElementById('btn-' + id).classList.toggle('active', id === f);
+  });
+  renderCalendar(currentEvents);
+}
+
+function eventMatchesFilter(cats) {
+  if (activeFilter === 'both') return true;
+  const isS1 = cats.includes('סבב 1');
+  const isS2 = cats.includes('סבב 2');
+  const isNeither = !isS1 && !isS2; // holidays, training, line etc — always show
+  if (isNeither) return true;
+  if (activeFilter === 's1') return isS1;
+  if (activeFilter === 's2') return isS2;
+  return true;
+}
+
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.querySelector('.theme-toggle').textContent = isDark ? '🌙 מצב כהה' : '☀️ מצב בהיר';
+}
+
+
+// ── ICS Parser ──
+function parseICS(text) {
+  const events = [];
+  const blocks = text.split('BEGIN:VEVENT');
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    const get = k => { const m = block.match(new RegExp(k + '[^:]*:([^\\r\\n]+)')); return m ? m[1].trim() : ''; };
+    const summary = get('SUMMARY');
+    if (!summary) continue;
+    events.push({
+      summary,
+      description: get('DESCRIPTION').replace(/\\n/g, '\n'),
+      categories:  get('CATEGORIES'),
+      start: parseDate(get('DTSTART')),
+      end:   parseDate(get('DTEND')),
+    });
+  }
+  return events;
+}
+
+function parseDate(s) {
+  if (!s) return null;
+  return new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8));
+}
+
+// ── Category → CSS class ──
+function shortSummary(s) {
+  return s
+    .replace(/\s*-\s*מחזור\s*\d+/, '')   // remove מחזור N
+    .replace(/\s*\(בבית\)/, ' - בבית')    // (בבית) → - בבית
+    .replace(/\s*\(בגזרה\)/, ' - במוצב') // (בגזרה) → - במוצב
+    .replace(/\s*\(במוצב\)/, ' - במוצב'); // (במוצב) → - במוצב
+}
+
+function catClass(c) {
+  if (c.includes('סבב 1 - בבית'))    return 'cat-s1-home';
+  if (c.includes('סבב 1 - בגזרה'))   return 'cat-s1-station';
+  if (c.includes('סבב 1 - חוזרים'))  return 'cat-s1-return';
+  if (c.includes('סבב 2 - בבית'))    return 'cat-s2-home';
+  if (c.includes('סבב 2 - בגזרה'))   return 'cat-s2-station';
+  if (c.includes('סבב 2 - חוזרים'))  return 'cat-s2-return';
+  if (c.includes('חג'))              return 'cat-holiday';
+  if (c.includes('הכשרה'))           return 'cat-training';
+  if (c.includes('קו'))              return 'cat-line';
+  if (c.includes('פיקוד'))           return 'cat-command';
+  return 'cat-special';
+}
+
+function isRotation(c) { return c.includes('סבב'); }
+function isHome(c)     { return c.includes('בבית'); }
+function isStation(c)  { return c.includes('בגזרה'); }
+function isReturn(c)   { return c.includes('חוזרים'); }
+
+function summaryPrefix(summary, categories) {
+  if (summary.includes('יום אחרון בקו'))  return '🎉 ';
+  if (summary.includes('יום עיבוד'))       return '🍺 ';
+  return '';
+}
+
+// ── Event map ──
+function dateKey(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function sameDay(a, b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+
+function buildEventMap(events) {
+  const map = {};
+  events.forEach(ev => {
+    if (!ev.start) return;
+    const endExcl = ev.end || new Date(ev.start.getTime() + 86400000);
+    const lastDay = new Date(endExcl.getTime() - 86400000);
+    const cur = new Date(ev.start);
+    while (cur < endExcl) {
+      const k = dateKey(cur);
+      if (!map[k]) map[k] = [];
+      map[k].push({ ev, isFirst: sameDay(cur, ev.start), isLast: sameDay(cur, lastDay) });
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+  return map;
+}
+
+// ── Render ──
+const HEB_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+const HEB_DAYS   = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const ALL_MONTHS  = [[2026,6],[2026,7],[2026,8],[2026,9],[2026,10]]; // Jul–Nov 2026
+
+let currentEvents = [];
+let currentMonthIndex = 0;
+
+function prevMonth() { if (currentMonthIndex > 0) { currentMonthIndex--; renderCalendar(currentEvents); } }
+function nextMonth() { if (currentMonthIndex < ALL_MONTHS.length - 1) { currentMonthIndex++; renderCalendar(currentEvents); } }
+
+function updateMonthNav() {
+  const [year, month] = ALL_MONTHS[currentMonthIndex];
+  document.getElementById('nav-label').textContent = `${HEB_MONTHS[month]} ${year}`;
+
+  const prevBtn = document.getElementById('nav-prev');
+  const nextBtn = document.getElementById('nav-next');
+  prevBtn.disabled = currentMonthIndex === 0;
+  nextBtn.disabled = currentMonthIndex === ALL_MONTHS.length - 1;
+
+  const prevHint = document.getElementById('hint-prev');
+  const nextHint = document.getElementById('hint-next');
+  prevHint.textContent = currentMonthIndex > 0
+    ? HEB_MONTHS[ALL_MONTHS[currentMonthIndex - 1][1]] : '';
+  nextHint.textContent = currentMonthIndex < ALL_MONTHS.length - 1
+    ? HEB_MONTHS[ALL_MONTHS[currentMonthIndex + 1][1]] : '';
+}
+
+function renderCalendar(events) {
+  currentEvents = events;
+  renderLegend(events);
+  const container = document.getElementById('calendar');
+  container.innerHTML = '';
+  const map   = buildEventMap(events.filter(ev => eventMatchesFilter(ev.categories)));
+  const today = new Date();
+  updateMonthNav();
+
+  const [year, month] = ALL_MONTHS[currentMonthIndex];
+  {
+    const block = document.createElement('div');
+    block.className = 'month-block';
+
+    // ── Grid view ──
+    const grid = document.createElement('div');
+    grid.className = 'calendar-grid';
+
+    HEB_DAYS.forEach(d => {
+      const dh = document.createElement('div');
+      dh.className = 'day-header';
+      dh.textContent = d;
+      grid.appendChild(dh);
+    });
+
+    const firstDay    = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const weekRows    = Math.ceil((firstDay + daysInMonth) / 7);
+    grid.style.gridTemplateRows = `auto repeat(${weekRows}, auto)`;
+
+    for (let i = 0; i < firstDay; i++) {
+      const e = document.createElement('div'); e.className = 'day-cell empty'; grid.appendChild(e);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+      const date = new Date(year, month, d);
+      if (sameDay(date, today)) cell.classList.add('today');
+
+      const num = document.createElement('div');
+      num.className = 'day-num';
+      num.textContent = d;
+      cell.appendChild(num);
+
+      (map[dateKey(date)] || []).forEach(({ ev, isFirst, isLast }) => {
+        const pill = document.createElement('div');
+        pill.className = `event-pill ${catClass(ev.categories)}`;
+
+        let pillText = shortSummary(ev.summary);
+        const prefix = summaryPrefix(ev.summary, ev.categories);
+        if (isRotation(ev.categories) && isHome(ev.categories)) {
+          if (isFirst) {
+            pillText = '😊 ' + (ev.categories.includes('סבב 1') ? 'סבב 1' : 'סבב 2') + ' - יוצאים הביתה';
+          } else {
+            const s = document.createElement('span');
+            s.className = 'pill-icon';
+            s.textContent = '🏠';
+            pill.appendChild(s);
+          }
+        } else if (isRotation(ev.categories) && (isStation(ev.categories) || isReturn(ev.categories))) {
+          const s = document.createElement('span');
+          s.className = 'pill-icon';
+          s.textContent = isReturn(ev.categories) ? '😔' : '🪖';
+          pill.appendChild(s);
+        } else if (prefix) {
+          pillText = prefix + pillText;
+        }
+
+        const label = document.createElement('span');
+        label.textContent = pillText;
+        pill.appendChild(label);
+
+        pill.addEventListener('mousemove', e => showTooltip(e, ev));
+        pill.addEventListener('mouseleave', hideTooltip);
+        pill.addEventListener('click', e => { e.stopPropagation(); toggleMobileTooltip(e, ev); });
+        cell.appendChild(pill);
+      });
+
+      grid.appendChild(cell);
+    }
+
+    // ── Agenda view (mobile) ──
+    const agenda = document.createElement('div');
+    agenda.className = 'agenda-list';
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const dayEvents = map[dateKey(date)] || [];
+
+      if (dayEvents.length === 0 && !sameDay(date, today)) continue;
+
+      const dayRow = document.createElement('div');
+      dayRow.className = 'agenda-day' + (sameDay(date, today) ? ' today' : '');
+
+      const dateDiv = document.createElement('div');
+      dateDiv.className = 'agenda-date';
+      const dn = document.createElement('div'); dn.className = 'dn'; dn.textContent = d;
+      const dw = document.createElement('div'); dw.className = 'dw'; dw.textContent = HEB_DAYS[date.getDay()];
+      dateDiv.appendChild(dn); dateDiv.appendChild(dw);
+      dayRow.appendChild(dateDiv);
+
+      const eventsDiv = document.createElement('div');
+      eventsDiv.className = 'agenda-events';
+
+      if (dayEvents.length === 0) {
+        const dash = document.createElement('div');
+        dash.style.cssText = 'font-size:0.7rem;color:var(--text-muted);padding:3px 0';
+        dash.textContent = 'היום';
+        eventsDiv.appendChild(dash);
+      } else {
+        dayEvents.forEach(({ ev, isFirst, isLast }) => {
+          const pill = document.createElement('div');
+          pill.className = `agenda-pill ${catClass(ev.categories)}`;
+
+          let pillText = shortSummary(ev.summary);
+          const prefix = summaryPrefix(ev.summary, ev.categories);
+          if (isRotation(ev.categories) && isHome(ev.categories)) {
+            if (isFirst) pillText = '😊 ' + (ev.categories.includes('סבב 1') ? 'סבב 1' : 'סבב 2') + ' - יוצאים הביתה';
+            else         pillText = '🏠 ' + pillText;
+          } else if (isRotation(ev.categories) && (isStation(ev.categories) || isReturn(ev.categories))) {
+            pillText = (isReturn(ev.categories) ? '😔 ' : '🪖 ') + pillText;
+          } else if (prefix) {
+            pillText = prefix + pillText;
+          }
+          pill.textContent = pillText;
+          pill.addEventListener('click', e => { e.stopPropagation(); toggleMobileTooltip(e, ev); });
+          eventsDiv.appendChild(pill);
+        });
+      }
+
+      dayRow.appendChild(eventsDiv);
+      agenda.appendChild(dayRow);
+    }
+
+    block.appendChild(grid);
+    block.appendChild(agenda);
+    container.appendChild(block);
+  }
+}
+
+// ── Tooltip ──
+const tooltip = document.getElementById('tooltip');
+const fmt = d => d ? `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}` : '';
+
+function tooltipHTML(ev) {
+  const last = ev.end ? new Date(ev.end.getTime() - 86400000) : ev.start;
+  return `<strong>${ev.summary}</strong>${ev.description ? ev.description.replace(/\n/g,'<br>') : ''}<div class="dates">${fmt(ev.start)} – ${fmt(last)}</div>`;
+}
+
+function showTooltip(e, ev) {
+  tooltip.style.position = 'fixed';
+  tooltip.innerHTML = tooltipHTML(ev);
+  tooltip._ev = ev;
+  tooltip.classList.add('visible');
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth  - 310) + 'px';
+  tooltip.style.top  = Math.min(e.clientY + 14, window.innerHeight - 180) + 'px';
+}
+function hideTooltip() { tooltip.classList.remove('visible'); }
+document.addEventListener('mousemove', e => { if (tooltip.classList.contains('visible')) moveTooltip(e); });
+
+// tap on mobile: show anchored below the pill, tap elsewhere dismisses
+function toggleMobileTooltip(e, ev) {
+  const isVisible = tooltip.classList.contains('visible') && tooltip._ev === ev;
+  hideTooltip();
+  if (isVisible) return;
+  tooltip.innerHTML = tooltipHTML(ev);
+  tooltip._ev = ev;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const left = Math.min(Math.max(8, rect.left), window.innerWidth - 310);
+  const top  = rect.bottom + 8 + window.scrollY;
+  tooltip.style.position = 'absolute';
+  tooltip.style.left = left + 'px';
+  tooltip.style.top  = top  + 'px';
+  tooltip.classList.add('visible');
+}
+document.addEventListener('click', () => hideTooltip());
+
+
+// ── File loader ──
+function loadICSFile(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  document.getElementById('icsFileName').textContent = file.name;
+  document.getElementById('emptyState').style.display = 'none';
+  const r = new FileReader();
+  r.onload = e => {
+    const text = e.target.result;
+    const calName = (text.match(/X-WR-CALNAME:([^\r\n]+)/) || [])[1];
+    const displayName = calName ? calName.trim() : file.name.replace('.ics','');
+    document.title = displayName;
+    document.getElementById('pageTitle').textContent = displayName;
+    renderCalendar(parseICS(text));
+  };
+  r.readAsText(file, 'UTF-8');
+}
+
+// Show file picker prompt on load
+document.getElementById('emptyState').style.display = 'flex';
+
+</script>
+</body>
+</html>

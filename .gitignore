@@ -1,0 +1,5 @@
+*.ics
+node_modules/
+package.json
+package-lock.json
+ss*.png
