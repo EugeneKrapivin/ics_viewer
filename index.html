@@ -310,6 +310,26 @@
   [data-theme="dark"] .cat-command    { background: #1a0028; color: #ce93d8; border-right-color: #7b1fa2; }
   [data-theme="dark"] .cat-special    { background: #00141a; color: #80cbc4; border-right-color: #00796b; }
 
+  .day-cell { position: relative; }
+  .day-x {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: hidden;
+  }
+  .day-x::before, .day-x::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 130%; height: 4px;
+    background: rgba(220,30,30,0.55);
+    border-radius: 2px;
+    transform-origin: center;
+  }
+  .day-x::before { transform: translate(-50%,-50%) rotate(45deg); }
+  .day-x::after  { transform: translate(-50%,-50%) rotate(-45deg); }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
@@ -345,6 +365,7 @@
   <h1 id="pageTitle">ICS Viewer</h1>
   <div class="header-right">
     <button class="theme-toggle" onclick="toggleTheme()">☀️ מצב בהיר</button>
+    <button id="secretBtn" onclick="toggleCrossedDays()" style="background:none;border:none;cursor:pointer;opacity:0.15;font-size:0.7rem;color:white;padding:4px;" title="">•</button>
   </div>
 </header>
 
@@ -607,6 +628,7 @@ function renderCalendar(events) {
     for (let d = 1; d <= daysInMonth; d++) {
       const cell = document.createElement('div');
       cell.className = 'day-cell';
+      cell.dataset.date = year + '-' + month + '-' + d;
       const date = new Date(year, month, d);
       if (sameDay(date, today)) cell.classList.add('today');
 
@@ -709,6 +731,7 @@ function renderCalendar(events) {
     block.appendChild(agenda);
     container.appendChild(block);
   }
+  applyCrossedDays();
 }
 
 // ── Tooltip ──
@@ -751,6 +774,55 @@ function toggleMobileTooltip(e, ev) {
 }
 document.addEventListener('click', () => hideTooltip());
 
+
+// ── Secret: cross out past deployed days ──
+let crossedDaysActive = false;
+
+function toggleCrossedDays() {
+  crossedDaysActive = !crossedDaysActive;
+  const btn = document.getElementById('secretBtn');
+  btn.style.opacity = crossedDaysActive ? '0.7' : '0.15';
+  btn.textContent = crossedDaysActive ? '✗' : '•';
+  applyCrossedDays();
+}
+
+function applyCrossedDays() {
+  // Remove all existing overlays
+  document.querySelectorAll('.day-x').forEach(el => el.remove());
+  if (!crossedDaysActive || !currentEvents.length) return;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  // Find first event start = reserves start date
+  const reservesStart = new Date(Math.min(...currentEvents.filter(e => e.start).map(e => e.start.getTime())));
+  reservesStart.setHours(0,0,0,0);
+
+  // Build set of days that have events (deployed days)
+  const eventDays = new Set();
+  currentEvents.forEach(ev => {
+    if (!ev.start) return;
+    const endExcl = ev.end || new Date(ev.start.getTime() + 86400000);
+    const cur = new Date(ev.start);
+    while (cur < endExcl) {
+      eventDays.add(dateKey(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  // Mark past days with events
+  document.querySelectorAll('.day-cell:not(.empty)').forEach(cell => {
+    if (!cell.dataset.date) return;
+    const [y, m, d] = cell.dataset.date.split('-').map(Number);
+    const cellDate = new Date(y, m, d);
+    cellDate.setHours(0,0,0,0);
+    if (cellDate >= reservesStart && cellDate < today && eventDays.has(dateKey(cellDate))) {
+      const x = document.createElement('div');
+      x.className = 'day-x';
+      cell.appendChild(x);
+    }
+  });
+}
 
 // ── File loader ──
 function loadICSFile(ev) {
