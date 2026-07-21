@@ -608,7 +608,6 @@ function updateMonthNav() {
 
 function renderCalendar(events) {
   currentEvents = events;
-  buildMonthsFromEvents(events);
   renderLegend(events);
   const container = document.getElementById('calendar');
   container.innerHTML = '';
@@ -853,7 +852,9 @@ function loadICSFile(ev) {
     const displayName = calName ? calName.trim() : file.name.replace('.ics','');
     document.title = displayName;
     document.getElementById('pageTitle').textContent = displayName;
-    renderCalendar(parseICS(text));
+    const parsed = parseICS(text);
+    buildMonthsFromEvents(parsed);
+    renderCalendar(parsed);
   };
   r.readAsText(file, 'UTF-8');
 }
