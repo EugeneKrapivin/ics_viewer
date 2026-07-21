@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <title>ICS Viewer</title>
 <style>
   :root {
@@ -753,9 +754,21 @@ function renderCalendar(events) {
 const tooltip = document.getElementById('tooltip');
 const fmt = d => d ? `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}` : '';
 
+// Escape untrusted ICS text before it ever touches innerHTML.
+function escapeHTML(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function tooltipHTML(ev) {
   const last = ev.end ? new Date(ev.end.getTime() - 86400000) : ev.start;
-  return `<strong>${ev.summary}</strong>${ev.description ? ev.description.replace(/\n/g,'<br>') : ''}<div class="dates">${fmt(ev.start)} – ${fmt(last)}</div>`;
+  const summary = escapeHTML(ev.summary);
+  const desc = ev.description ? escapeHTML(ev.description).replace(/\n/g, '<br>') : '';
+  return `<strong>${summary}</strong>${desc}<div class="dates">${fmt(ev.start)} – ${fmt(last)}</div>`;
 }
 
 function showTooltip(e, ev) {
