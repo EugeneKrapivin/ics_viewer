@@ -71,6 +71,17 @@
   }
   .legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--text); }
+  .legend-toggle {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .legend-toggle:hover { border-color: var(--border); background: var(--surface2); }
+  .legend-toggle.legend-off { opacity: 0.35; }
   .legend-dot { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
   .legend-sep { color: var(--border); }
 
@@ -275,7 +286,7 @@
     .theme-toggle { padding: 5px 10px; font-size: 0.75rem; }
 
     .toolbar { padding: 8px 12px; gap: 6px; flex-direction: column; align-items: flex-start; }
-    .legend { display: none; }  /* hide legend on mobile — color is self-evident */
+    .legend { gap: 6px; font-size: 0.72rem; }  /* keep visible on mobile — now clickable filters */
 
     .months-container { padding: 0; min-height: 0; }
     .month-block { border-radius: 0; min-height: 0; }
@@ -375,11 +386,7 @@
     <div class="legend" id="legend"></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <span style="font-size:0.8rem;color:var(--text-muted)">הצג:</span>
-    <button class="round-btn active" id="btn-both" onclick="setFilter('both')">שני הסבבים</button>
-    <button class="round-btn" id="btn-s1" onclick="setFilter('s1')">סבב 1 בלבד</button>
-    <button class="round-btn" id="btn-s2" onclick="setFilter('s2')">סבב 2 בלבד</button>
-    <span class="legend-sep" style="margin:0 4px">|</span>
+    <button class="round-btn" id="btn-clear-filter" onclick="clearCategoryFilter()" style="display:none">הצג הכל</button>
     <input type="file" id="icsFile" accept=".ics" style="display:none" onchange="loadICSFile(event)">
     <button class="round-btn" onclick="document.getElementById('icsFile').click()">📂 טען ICS</button>
     <span id="icsFileName" style="font-size:0.75rem;color:var(--text-muted)"></span>
@@ -411,7 +418,10 @@
 <div class="tooltip" id="tooltip"></div>
 
 <script>
-// ── Legend ──
+// ── Legend + category filter ──
+// activeCategories = null means "show all". Otherwise a Set of enabled category strings.
+let activeCategories = null;
+
 function renderLegend(events) {
   const seen = new Set();
   const items = [];
@@ -441,38 +451,52 @@ function renderLegend(events) {
       legend.appendChild(sep);
     }
     lastGroup = group;
-    const item = document.createElement('div');
-    item.className = 'legend-item';
+    const item = document.createElement('button');
+    item.className = 'legend-item legend-toggle';
+    item.title = 'לחץ לסינון';
+    // Dim if a filter is active and this category is not selected
+    const isActive = !activeCategories || activeCategories.has(cat);
+    item.classList.toggle('legend-off', !isActive);
     const dot = document.createElement('div');
     dot.className = `legend-dot ${css}`;
     const lbl = document.createElement('span');
     lbl.textContent = label;
     item.appendChild(dot);
     item.appendChild(lbl);
+    item.addEventListener('click', () => toggleCategory(cat));
     legend.appendChild(item);
   });
 }
 
+function toggleCategory(cat) {
+  if (!currentEvents.length) return;
+  // Build the full set of categories present
+  const allCats = new Set(currentEvents.map(e => e.categories).filter(Boolean));
 
-let activeFilter = 'both';
+  if (activeCategories === null) {
+    // First click: isolate this category (show only it)
+    activeCategories = new Set([cat]);
+  } else if (activeCategories.has(cat)) {
+    activeCategories.delete(cat);
+    if (activeCategories.size === 0) activeCategories = null; // none left → show all
+  } else {
+    activeCategories.add(cat);
+    if (activeCategories.size === allCats.size) activeCategories = null; // all on → show all
+  }
 
-function setFilter(f) {
-  activeFilter = f;
-  ['both','s1','s2'].forEach(id => {
-    document.getElementById('btn-' + id).classList.toggle('active', id === f);
-  });
+  document.getElementById('btn-clear-filter').style.display = activeCategories ? '' : 'none';
+  renderCalendar(currentEvents);
+}
+
+function clearCategoryFilter() {
+  activeCategories = null;
+  document.getElementById('btn-clear-filter').style.display = 'none';
   if (currentEvents.length) renderCalendar(currentEvents);
 }
 
 function eventMatchesFilter(cats) {
-  if (activeFilter === 'both') return true;
-  const isS1 = cats.includes('סבב 1');
-  const isS2 = cats.includes('סבב 2');
-  const isNeither = !isS1 && !isS2; // holidays, training, line etc — always show
-  if (isNeither) return true;
-  if (activeFilter === 's1') return isS1;
-  if (activeFilter === 's2') return isS2;
-  return true;
+  if (activeCategories === null) return true;
+  return activeCategories.has(cats);
 }
 
 
